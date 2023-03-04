@@ -1,0 +1,7 @@
+port: ":9090"
+host: "localhost"
+
+#“panic”, “fatal”, “error”, “warning”, “info”, “debug”, “trace”
+log_level: "trace"
+#relative path to trace directory
+trace_directory: "/tmp"
