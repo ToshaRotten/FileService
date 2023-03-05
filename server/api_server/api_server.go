@@ -7,12 +7,24 @@ package api_server
 //• DELETE, удалить по имени файла из папки /tmp файл, если файла нет - возвращать ошибку
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fileService/api_server/config"
 	"fileService/api_server/file_helper"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
+	"io/ioutil"
 	"net/http"
 )
+
+type Bar struct {
+	Hash [20]byte `json:"hash"`
+	Name string   `json:"name"`
+}
+
+type Foo struct {
+	Bar Bar `json:"bar"`
+}
 
 // APIServer ..
 type APIServer struct {
@@ -78,13 +90,45 @@ func (s *APIServer) configureRouter() {
 
 func (s *APIServer) getFileList() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
+		s.FileHelper.UpdateFiles()
+		array := make([]Foo, s.FileHelper.CountOfFiles())
+		for i, file := range s.FileHelper.Files {
+			array[i].Bar.Hash = file.Hash
+			array[i].Bar.Name = file.Name
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusAccepted)
+		data, err := json.Marshal(&array)
+		if err != nil {
+			s.Logger.Error(err)
+		}
+		s.Logger.Trace("GET FILE LIST, FILE LIST:", array)
+		s.Logger.Trace("COUNT OF FILES:", s.FileHelper.CountOfFiles())
+		w.Write(data)
 	})
 }
 
 func (s *APIServer) getFile() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
+		var temp Bar
+		reqBody, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			s.Logger.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		err = json.Unmarshal(reqBody, &temp)
+		if err != nil {
+			s.Logger.Error(err)
+			w.WriteHeader(http.StatusNoContent)
+		}
+		err, data := s.FileHelper.GetFileData(temp.Name)
+		if err != nil {
+			s.Logger.Error(err)
+			w.WriteHeader(http.StatusNotFound)
+		}
+		dst := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
+		base64.StdEncoding.Encode(dst, data)
+		w.Header().Add("file-data", string(dst))
 	})
 }
 
@@ -102,6 +146,22 @@ func (s *APIServer) updateFile() http.HandlerFunc {
 
 func (s *APIServer) deleteFile() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
+		var temp Bar
+		reqBody, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			s.Logger.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		err = json.Unmarshal(reqBody, &temp)
+		if err != nil {
+			s.Logger.Error(err)
+			w.WriteHeader(http.StatusNoContent)
+		}
+		err = s.FileHelper.RemoveFile(temp.Name)
+		if err != nil {
+			s.Logger.Error(err)
+			w.WriteHeader(http.StatusNotModified)
+		}
+		s.Logger.Trace("DELETE FILE", temp)
 	})
 }
