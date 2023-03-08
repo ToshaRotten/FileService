@@ -1,3 +1,3 @@
-module github.com/TohsaRotten/fileService
+module fileService
 
 go 1.18
