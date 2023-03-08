@@ -35,4 +35,5 @@ func main() {
 	}
 	client := api_client.New(conf)
 	client.GetFileList()
+	client.DeleteFileByName("new.txt")
 }
