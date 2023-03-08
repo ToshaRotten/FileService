@@ -20,6 +20,7 @@ import (
 type Bar struct {
 	Hash [20]byte `json:"hash"`
 	Name string   `json:"name"`
+	Data string   `json:"data"`
 }
 
 type Foo struct {
@@ -48,13 +49,18 @@ func New() *APIServer {
 // Start ..
 func (s *APIServer) Start(config *config.Config) error {
 	s.Config = config
-	s.configureLogger()
+	err := s.configureLogger()
+	if err != nil {
+		s.Logger.Error(err)
+		return err
+	}
 	s.configureRouter()
 	s.configureFileHelper()
 	s.Logger.Info("Server is started ...")
 	s.Logger.Info("Bind addr: http://", s.Config.Host+s.Config.Port)
-	err := http.ListenAndServe(s.Config.Host+s.Config.Port, s.Router)
+	err = http.ListenAndServe(s.Config.Host+s.Config.Port, s.Router)
 	if err != nil {
+		s.Logger.Error(err)
 		return err
 	}
 	return nil
@@ -70,27 +76,28 @@ func (s *APIServer) configureLogger() error {
 }
 
 func (s *APIServer) configureFileHelper() {
-	s.Logger.Trace("FileHelper ...")
 	s.FileHelper.SetTraceDirectory(s.Config.TraceDirectory)
-	err := s.FileHelper.UpdateFiles()
-	if err != nil {
-		s.Logger.Error(err)
-	}
+	s.Logger.Trace("FileHelper ...")
+	go func() {
+		err := s.FileHelper.Inotify()
+		if err != nil {
+			s.Logger.Error(err)
+		}
+	}()
 }
 
 // configureRouter ..
 func (s *APIServer) configureRouter() {
 	s.Logger.Trace("Router ...")
 	s.Router.HandleFunc("/file/get/file_list", s.getFileList())
-	s.Router.HandleFunc("/file/get/", s.getFile())
-	s.Router.HandleFunc("/file/put/", s.putFile())
-	s.Router.HandleFunc("/file/update/", s.updateFile())
-	s.Router.HandleFunc("/file/delete/", s.deleteFile())
+	s.Router.HandleFunc("/file/get", s.getFile())
+	s.Router.HandleFunc("/file/put", s.putFile())
+	s.Router.HandleFunc("/file/update", s.updateFile())
+	s.Router.HandleFunc("/file/delete", s.deleteFile())
 }
 
 func (s *APIServer) getFileList() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.FileHelper.UpdateFiles()
 		array := make([]Foo, s.FileHelper.CountOfFiles())
 		for i, file := range s.FileHelper.Files {
 			array[i].Bar.Hash = file.Hash
@@ -104,7 +111,10 @@ func (s *APIServer) getFileList() http.HandlerFunc {
 		}
 		s.Logger.Trace("GET FILE LIST, FILE LIST:", array)
 		s.Logger.Trace("COUNT OF FILES:", s.FileHelper.CountOfFiles())
-		w.Write(data)
+		_, err = w.Write(data)
+		if err != nil {
+			s.Logger.Error(err)
+		}
 	})
 }
 
@@ -128,19 +138,81 @@ func (s *APIServer) getFile() http.HandlerFunc {
 		}
 		dst := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
 		base64.StdEncoding.Encode(dst, data)
-		w.Header().Add("file-data", string(dst))
+		w.Header().Add("data", string(dst))
 	})
 }
 
 func (s *APIServer) putFile() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
+		var temp Bar
+		reqBody, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			s.Logger.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		err = json.Unmarshal(reqBody, &temp)
+		if err != nil {
+			s.Logger.Error(err)
+			w.WriteHeader(http.StatusUnprocessableEntity)
+		}
+		s.Logger.Trace("PUT FILE REQUEST", temp)
+		if s.FileHelper.CheckFileByName(temp.Name) {
+			w.WriteHeader(http.StatusAlreadyReported)
+		} else {
+			dst := make([]byte, base64.StdEncoding.EncodedLen(len(temp.Data)))
+			_, err = base64.StdEncoding.Decode(dst, []byte(temp.Data))
+			if err != nil {
+				s.Logger.Error(err)
+			}
+			err = s.FileHelper.WriteFile(dst, temp.Name)
+			if err != nil {
+				s.Logger.Error(err)
+				w.WriteHeader(http.StatusNotModified)
+			}
+		}
 	})
 }
 
 func (s *APIServer) updateFile() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var temp Bar
+		reqBody, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			s.Logger.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		err = json.Unmarshal(reqBody, &temp)
+		if err != nil {
+			s.Logger.Error(err)
+			w.WriteHeader(http.StatusUnprocessableEntity)
+		}
 
+		if !s.FileHelper.CheckFileByName(temp.Name) {
+			w.WriteHeader(http.StatusNoContent)
+			s.Logger.Error("File not found")
+		}
+		err, hash := s.FileHelper.GetFileHash(temp.Name)
+		if err != nil {
+			s.Logger.Error(err)
+			w.WriteHeader(http.StatusNoContent)
+		}
+		if hash == temp.Hash {
+			s.Logger.Trace("UPDATE FILE REQUEST", temp)
+			err = s.FileHelper.RemoveFile(temp.Name)
+			if err != nil {
+				s.Logger.Error(err)
+			}
+			dst := make([]byte, base64.StdEncoding.EncodedLen(len(temp.Data)))
+			_, err = base64.StdEncoding.Decode(dst, []byte(temp.Data))
+			if err != nil {
+				s.Logger.Error(err)
+			}
+			err = s.FileHelper.WriteFile(dst, temp.Name)
+			if err != nil {
+				s.Logger.Error(err)
+				w.WriteHeader(http.StatusBadRequest)
+			}
+		}
 	})
 }
 
@@ -155,13 +227,13 @@ func (s *APIServer) deleteFile() http.HandlerFunc {
 		err = json.Unmarshal(reqBody, &temp)
 		if err != nil {
 			s.Logger.Error(err)
-			w.WriteHeader(http.StatusNoContent)
+			w.WriteHeader(http.StatusUnprocessableEntity)
 		}
+		s.Logger.Trace("DELETE FILE", temp)
 		err = s.FileHelper.RemoveFile(temp.Name)
 		if err != nil {
 			s.Logger.Error(err)
 			w.WriteHeader(http.StatusNotModified)
 		}
-		s.Logger.Trace("DELETE FILE", temp)
 	})
 }
