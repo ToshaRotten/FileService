@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fileService/api_server/config"
 	"fileService/api_server/file_helper"
+	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
@@ -77,6 +78,7 @@ func (s *APIServer) configureLogger() error {
 
 func (s *APIServer) configureFileHelper() {
 	s.FileHelper.SetTraceDirectory(s.Config.TraceDirectory)
+	s.FileHelper.UpdateFiles()
 	s.Logger.Trace("FileHelper ...")
 	go func() {
 		err := s.FileHelper.Inotify()
@@ -98,13 +100,13 @@ func (s *APIServer) configureRouter() {
 
 func (s *APIServer) getFileList() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.FileHelper.UpdateFiles()
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		array := make([]Foo, s.FileHelper.CountOfFiles())
 		for i, file := range s.FileHelper.Files {
 			array[i].Bar.Hash = file.Hash
 			array[i].Bar.Name = file.Name
 		}
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(http.StatusAccepted)
 		data, err := json.Marshal(&array)
 		if err != nil {
 			s.Logger.Error(err)
@@ -120,6 +122,7 @@ func (s *APIServer) getFileList() http.HandlerFunc {
 
 func (s *APIServer) getFile() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.FileHelper.UpdateFiles()
 		var temp Bar
 		reqBody, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -134,10 +137,19 @@ func (s *APIServer) getFile() http.HandlerFunc {
 		err, data := s.FileHelper.GetFileData(temp.Name)
 		if err != nil {
 			s.Logger.Error(err)
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(http.StatusNoContent)
 		}
 		dst := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
 		base64.StdEncoding.Encode(dst, data)
+		temp.Data = string(dst)
+		data, err = json.Marshal(&temp)
+		if err != nil {
+			s.Logger.Error(err)
+		}
+		_, err = w.Write(data)
+		if err != nil {
+			s.Logger.Error(err)
+		}
 		w.Header().Add("data", string(dst))
 	})
 }
@@ -186,24 +198,25 @@ func (s *APIServer) updateFile() http.HandlerFunc {
 			s.Logger.Error(err)
 			w.WriteHeader(http.StatusUnprocessableEntity)
 		}
-
 		if !s.FileHelper.CheckFileByName(temp.Name) {
-			w.WriteHeader(http.StatusNoContent)
 			s.Logger.Error("File not found")
+			w.WriteHeader(http.StatusNoContent)
 		}
 		err, hash := s.FileHelper.GetFileHash(temp.Name)
 		if err != nil {
 			s.Logger.Error(err)
 			w.WriteHeader(http.StatusNoContent)
 		}
-		if hash == temp.Hash {
+		dst := make([]byte, base64.StdEncoding.EncodedLen(len(temp.Data)))
+		_, err = base64.StdEncoding.Decode(dst, []byte(temp.Data))
+		if err != nil {
+			s.Logger.Error(err)
+		}
+		fmt.Println(hash)
+		fmt.Println(temp.Hash)
+		if !(hash == temp.Hash) {
 			s.Logger.Trace("UPDATE FILE REQUEST", temp)
 			err = s.FileHelper.RemoveFile(temp.Name)
-			if err != nil {
-				s.Logger.Error(err)
-			}
-			dst := make([]byte, base64.StdEncoding.EncodedLen(len(temp.Data)))
-			_, err = base64.StdEncoding.Decode(dst, []byte(temp.Data))
 			if err != nil {
 				s.Logger.Error(err)
 			}
@@ -212,12 +225,16 @@ func (s *APIServer) updateFile() http.HandlerFunc {
 				s.Logger.Error(err)
 				w.WriteHeader(http.StatusBadRequest)
 			}
+		} else {
+			s.Logger.Trace("Everything is up-to-date")
+			w.WriteHeader(http.StatusAlreadyReported)
 		}
 	})
 }
 
 func (s *APIServer) deleteFile() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.Logger.Trace("DELETE FILE")
 		var temp Bar
 		reqBody, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -229,7 +246,6 @@ func (s *APIServer) deleteFile() http.HandlerFunc {
 			s.Logger.Error(err)
 			w.WriteHeader(http.StatusUnprocessableEntity)
 		}
-		s.Logger.Trace("DELETE FILE", temp)
 		err = s.FileHelper.RemoveFile(temp.Name)
 		if err != nil {
 			s.Logger.Error(err)

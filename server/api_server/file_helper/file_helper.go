@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/fsnotify/fsnotify"
 	_ "github.com/fsnotify/fsnotify"
+	"io/fs"
 	"io/ioutil"
 	"os"
 )
@@ -29,6 +30,7 @@ func New() *FileHelper {
 func (f *FileHelper) CountOfFiles() int {
 	var counter int
 	for counter, _ = range f.Files {
+		counter++
 	}
 	return counter
 }
@@ -110,8 +112,13 @@ func (f *FileHelper) CheckFileByHash(fileHash [20]byte) bool {
 	return false
 }
 
+func (f *FileHelper) ClearFiles() {
+	f.Files = nil
+}
+
 func (f *FileHelper) UpdateFiles() error {
-	fmt.Println("FILES IS UPDATED")
+	f.ClearFiles()
+	var files []fs.FileInfo
 	var temp File
 	files, err := ioutil.ReadDir("." + f.traceDirectory)
 	if err != nil {
@@ -151,6 +158,7 @@ func (f *FileHelper) WriteFile(data []byte, fileName string) error {
 	if err != nil {
 		return err
 	}
+	f.UpdateFiles()
 	return nil
 }
 
@@ -169,5 +177,6 @@ func (f *FileHelper) RemoveFile(fileName string) error {
 	if err != nil {
 		return err
 	}
+	f.UpdateFiles()
 	return nil
 }
