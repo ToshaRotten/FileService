@@ -3,13 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/briandowns/spinner"
 	"github.com/common-nighthawk/go-figure"
 	"github.com/sirupsen/logrus"
 	"main/api_client"
 	"main/api_client/config"
 	"os"
-	"time"
 )
 
 var (
@@ -24,13 +22,6 @@ func init() {
 	flag.StringVar(&host, "host", "", "Set host")
 	flag.StringVar(&port, "port", "", "Set port")
 	logger = logrus.New()
-}
-
-func loadAnim() {
-	s := spinner.New(spinner.CharSets[9], 100*time.Millisecond) // Build our new spinner
-	s.Start()                                                   // Start the spinner
-	time.Sleep(4 * time.Second)                                 // Run for some time to simulate work
-	s.Stop()
 }
 
 func Loop(client *api_client.APIClient) {
