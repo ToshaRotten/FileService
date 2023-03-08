@@ -1,4 +1,4 @@
-package api_server
+package APIServer
 
 //• GET, получить список файлов и их hash по содержимому на сервере в папке /tmp
 //• GET, получить по имени файла из папки /tmp файл, если файла нет - возвращать ошибку
@@ -9,9 +9,9 @@ package api_server
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fileService/api_server/config"
-	"fileService/api_server/file_helper"
 	"fmt"
+	"github.com/ToshaRotten/fileService/APIServer/config"
+	"github.com/ToshaRotten/fileService/APIServer/file_helper"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
