@@ -3,6 +3,8 @@ package file_helper
 import (
 	"crypto/sha1"
 	"fmt"
+	"github.com/fsnotify/fsnotify"
+	_ "github.com/fsnotify/fsnotify"
 	"io/ioutil"
 	"os"
 )
@@ -26,10 +28,46 @@ func New() *FileHelper {
 
 func (f *FileHelper) CountOfFiles() int {
 	var counter int
-	for _, _ = range f.Files {
-		counter++
+	for counter, _ = range f.Files {
 	}
 	return counter
+}
+
+func (f *FileHelper) Inotify() error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	defer watcher.Close()
+
+	done := make(chan bool)
+
+	go func() error {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return err
+				}
+				if event.Has(fsnotify.Create) || event.Has(fsnotify.Write) || event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename) {
+					err = f.UpdateFiles()
+					if err != nil {
+						return err
+					}
+				}
+			case err := <-watcher.Errors:
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}()
+	err = watcher.Add("." + f.traceDirectory)
+	if err != nil {
+		return err
+	}
+	<-done
+	return nil
 }
 
 // SetTraceDirectory ..
@@ -73,6 +111,7 @@ func (f *FileHelper) CheckFileByHash(fileHash [20]byte) bool {
 }
 
 func (f *FileHelper) UpdateFiles() error {
+	fmt.Println("FILES IS UPDATED")
 	var temp File
 	files, err := ioutil.ReadDir("." + f.traceDirectory)
 	if err != nil {
@@ -102,6 +141,19 @@ func (f *FileHelper) GetFileHash(fileName string) (error, [20]byte) {
 	return nil, hash
 }
 
+// WriteFile ..
+func (f *FileHelper) WriteFile(data []byte, fileName string) error {
+	file, err := os.Create("." + f.traceDirectory + "/" + fileName)
+	if err != nil {
+		return err
+	}
+	_, err = file.Write(data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetFileData ..
 func (f *FileHelper) GetFileData(fileName string) (error, []byte) {
 	data, err := os.ReadFile("." + f.traceDirectory + "/" + fileName)
@@ -117,6 +169,5 @@ func (f *FileHelper) RemoveFile(fileName string) error {
 	if err != nil {
 		return err
 	}
-	f.UpdateFiles()
 	return nil
 }
