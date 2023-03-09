@@ -1,6 +1,6 @@
 FROM golang:latest
 
-WORKDIR /app
+WORKDIR /client
 COPY go.mod ./
 COPY go.sum ./
 
@@ -13,3 +13,4 @@ EXPOSE 9090
 RUN go build client.go
 
 CMD [ "./client" ]
+#docker run --rm -it --name prg fileservice-client
