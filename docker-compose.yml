@@ -8,11 +8,13 @@ services:
       - 9090:9090
 
   client:
+    depends_on:
+      - server
     build: client/
 
     command: ./client
-
     network_mode: host
 
-    depends_on:
-      - server
+    stdin_open: true
+    tty: true
+
