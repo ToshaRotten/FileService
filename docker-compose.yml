@@ -1,0 +1,18 @@
+version: "3"
+services:
+  server:
+    build: server/
+
+    command: ./server
+    ports:
+      - 9090:9090
+
+  client:
+    build: client/
+
+    command: ./client
+
+    network_mode: host
+
+    depends_on:
+      - server
