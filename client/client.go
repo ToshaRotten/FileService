@@ -1,10 +1,10 @@
-package client
+package main
 
 import (
 	"flag"
 	"fmt"
-	"github.com/ToshaRotten/fileService/api_client"
-	"github.com/ToshaRotten/fileService/api_client/config"
+	"github.com/ToshaRotten/fileService/client/api_client"
+	"github.com/ToshaRotten/fileService/client/api_client/config"
 	"github.com/common-nighthawk/go-figure"
 	"github.com/sirupsen/logrus"
 	"os"
@@ -18,7 +18,7 @@ var (
 )
 
 func init() {
-	flag.StringVar(&configPath, "path", "configs/config.yaml", "Set host")
+	flag.StringVar(&configPath, "path", "configs/config.yaml", "Set path to config")
 	flag.StringVar(&host, "host", "", "Set host")
 	flag.StringVar(&port, "port", "", "Set port")
 	logger = logrus.New()
@@ -77,6 +77,7 @@ func Loop(client *api_client.APIClient) {
 }
 
 func main() {
+	flag.Parse()
 	logo := figure.NewFigure("FileService - Client", "", true)
 	logo.Print()
 

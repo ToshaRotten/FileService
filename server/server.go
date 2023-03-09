@@ -2,8 +2,9 @@ package main
 
 import (
 	"flag"
-	"github.com/ToshaRotten/fileService/api_server"
-	"github.com/ToshaRotten/fileService/api_server/config"
+	"github.com/ToshaRotten/fileService/server/api_server"
+	"github.com/ToshaRotten/fileService/server/api_server/config"
+	"github.com/common-nighthawk/go-figure"
 	"github.com/sirupsen/logrus"
 )
 
