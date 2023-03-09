@@ -10,6 +10,22 @@
     ОБНОВИТЬ файл на сервере
     УДАЛИТЬ файл с сервера
 
+
+## Docker-compose не работает, т.к используется интерактивный контейнер
+Для запуска:
+
+    cd server/
+
+    docker build -t fileservice-server .
+
+    cd client/
+
+    docker build -t fileservice-client .
+
+    docker run fileservice-server
+
+    docker run --rm -it fileservice-client
+
 ## Запуск сервера:
     make server
 
