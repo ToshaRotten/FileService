@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . ./
 
-EXPOSE 9090
+EXPOSE 8001
 
 RUN go build server.go
 
