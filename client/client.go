@@ -90,5 +90,6 @@ func main() {
 		conf.Port = port
 	}
 	client := api_client.New(conf)
+	fmt.Println("Port: ", conf.Port)
 	Loop(client)
 }
